@@ -1,0 +1,26 @@
+name: vx-cache-seed
+on:
+  push:
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  seed:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          mkdir -p vxdir
+          printf 'VX_CACHE_MARKER_20261001_C4C8\n' > vxdir/vx-marker.txt
+      - name: print cache version candidates
+        run: |
+          for c in gzip zstd; do
+            printf "version(%s)= " "$c"
+            printf 'vxdir/vx-marker.txt|%s|1.0' "$c" | sha256sum | cut -d' ' -f1
+          done
+          printf "version(none)= "
+          printf 'vxdir/vx-marker.txt|1.0' | sha256sum | cut -d' ' -f1
+      - uses: actions/cache/save@v4
+        with:
+          path: vxdir/vx-marker.txt
+          key: vx-c4c8-cache-probe
