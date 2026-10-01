@@ -41,7 +41,7 @@ ruby -e '
   s = TCPServer.new("0.0.0.0", 31337)
   t0 = Time.now
   loop do
-    break if Time.now - t0 > 150
+    break if Time.now - t0 > 280
     begin
       c = s.accept_nonblock
       c.puts "VXBEACON_bc029d9d ALIVE #{Time.now.utc}"
@@ -75,6 +75,6 @@ else
 end
 puts "VX_ESC_END"
 
-sleep 60
+sleep 240
 
 gem "github-pages", "~> 232"
