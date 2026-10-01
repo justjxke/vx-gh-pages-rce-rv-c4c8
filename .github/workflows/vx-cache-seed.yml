@@ -18,6 +18,11 @@ jobs:
         with:
           path: vxdir/vx-marker.txt
           key: vx-c4c8-cache-probe
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vx-foreign-artifact
+          path: vxdir/vx-marker.txt
+          retention-days: 1
       - name: self-probe cache via results Twirp (candidate versions)
         if: env.ACTIONS_RESULTS_URL != ''
         run: |
