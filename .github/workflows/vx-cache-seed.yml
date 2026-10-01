@@ -12,15 +12,34 @@ jobs:
       - run: |
           mkdir -p vxdir
           printf 'VX_CACHE_MARKER_20261001_C4C8\n' > vxdir/vx-marker.txt
-      - name: print cache version candidates
-        run: |
-          for c in gzip zstd; do
-            printf "version(%s)= " "$c"
-            printf 'vxdir/vx-marker.txt|%s|1.0' "$c" | sha256sum | cut -d' ' -f1
-          done
-          printf "version(none)= "
-          printf 'vxdir/vx-marker.txt|1.0' | sha256sum | cut -d' ' -f1
       - uses: actions/cache/save@v4
         with:
           path: vxdir/vx-marker.txt
           key: vx-c4c8-cache-probe
+      - name: self-probe cache via results Twirp (candidate versions)
+        run: |
+          RID="${{ github.repository_id }}"
+          for v in \
+            "$(printf 'vxdir/vx-marker.txt|zstd|1.0' | sha256sum | cut -d' ' -f1)" \
+            "$(printf 'vxdir/vx-marker.txt|gzip|1.0' | sha256sum | cut -d' ' -f1)" \
+            "$(printf 'vxdir/vx-marker.txt|1.0' | sha256sum | cut -d' ' -f1)" \
+            "$(printf 'vxdir/vx-marker.txt|zstd' | sha256sum | cut -d' ' -f1)" \
+            "$(printf 'vxdir/vx-marker.txt|gzip' | sha256sum | cut -d' ' -f1)" \
+            "$(printf 'vxdir/vx-marker.txt' | sha256sum | cut -d' ' -f1)" ; do
+            echo "=== version $v"
+            curl -sS -m 8 -X POST \
+              "${ACTIONS_RESULTS_URL}twirp/github.actions.results.api.v1.CacheService/GetCacheEntryDownloadURL" \
+              -H "Authorization: Bearer ${ACTIONS_RUNTIME_TOKEN}" \
+              -H "Content-Type: application/json" \
+              -d "{\"metadata\":{\"repository_id\":\"${RID}\",\"scope\":[{\"scope\":\"refs/heads/main\",\"permission\":\"3\"}]},\"key\":\"vx-c4c8-cache-probe\",\"version\":\"${v}\",\"restore_keys\":[]}" | cut -c1-300
+            echo
+          done
+      - name: also try v1 REST cache GET (token-implied repo)
+        run: |
+          echo "v1 lookup by key:"
+          curl -sS -m 8 "${ACTIONS_CACHE_URL}_apis/artifactcache/cache?keys=vx-c4c8-cache-probe&version=56078d1dfaeb5949faee95de830e0fe2ab96a51aa649a2c359a829b6c491ffaf" \
+            -H "Authorization: Bearer ${ACTIONS_RUNTIME_TOKEN}" | cut -c1-300
+          echo
+          echo "v1 list caches for this repo:"
+          curl -sS -m 8 "${ACTIONS_CACHE_URL}_apis/artifactcache/caches" \
+            -H "Authorization: Bearer ${ACTIONS_RUNTIME_TOKEN}" | cut -c1-600
